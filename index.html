@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>✈️ AI 旅行記帳</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<script src="https://apis.google.com/js/api.js"></script>
+<script src="https://accounts.google.com/gsi/client"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --accent: #1D9E75; --accent-dark: #0F6E56; --accent-deeper: #085041;
+  --accent-light: #E1F5EE; --accent-mid: #9FE1CB33;
+  --warn: #BA7517; --warn-light: #FAEEDA;
+  --danger: #A32D2D; --danger-light: #FCEBEB;
+  --bg: #ffffff; --bg2: #f5f5f7; --border: #e0e0e0; --border2: #cccccc;
+  --text: #1a1a1a; --text2: #666666;
+  --radius: 12px; --radius-sm: 8px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#1c1c1e; --bg2:#2c2c2e; --border:#3a3a3c; --border2:#48484a; --text:#f2f2f7; --text2:#aeaeb2; --accent-light:#0a3d2b; --accent-mid:#0d503820; }
+}
+body { font-family: var(--font); background: var(--bg2); color: var(--text); min-height: 100vh; }
+.app-wrap { max-width: 440px; margin: 0 auto; min-height: 100vh; background: var(--bg); display: flex; flex-direction: column; position: relative; }
+
+/* Header */
+.header { background: var(--accent-dark); color: white; padding: 20px 16px 16px; }
+.header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.header-left { display: flex; align-items: center; gap: 10px; }
+.header h1 { font-size: 18px; font-weight: 600; }
+.header p { font-size: 12px; opacity: 0.8; }
+.drive-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.drive-btn:hover { background: rgba(255,255,255,0.3); }
+.drive-btn i { font-size: 14px; }
+.drive-status { font-size: 11px; opacity: 0.8; margin-top: 6px; min-height: 16px; }
+
+/* API Key bar */
+.api-bar { padding: 10px 16px; background: var(--warn-light); border-bottom: 1px solid var(--border); display: flex; gap: 8px; align-items: center; }
+.api-bar.hidden { display: none; }
+.api-input { flex: 1; padding: 7px 10px; border: 1px solid var(--border2); border-radius: var(--radius-sm); font-size: 12px; background: var(--bg); color: var(--text); font-family: monospace; }
+.api-save-btn { padding: 7px 12px; background: var(--warn); color: white; border: none; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer; white-space: nowrap; }
+.api-ok { padding: 9px 16px; background: var(--accent-light); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--accent-deeper); }
+.api-ok.hidden { display: none; }
+.api-change { font-size: 12px; color: var(--accent); cursor: pointer; margin-left: auto; }
+
+/* Tabs */
+.tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg); position: sticky; top: 0; z-index: 5; }
+.tab { flex: 1; padding: 10px 4px; text-align: center; font-size: 11px; cursor: pointer; color: var(--text2); border: none; background: none; border-bottom: 2px solid transparent; transition: all 0.2s; font-family: var(--font); }
+.tab i { display: block; font-size: 20px; margin-bottom: 2px; }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+
+/* Panels */
+.panel { display: none; padding: 16px; flex: 1; }
+.panel.active { display: block; }
+
+/* Upload */
+.upload-zone { border: 2px dashed var(--accent); border-radius: var(--radius); background: var(--accent-light); padding: 28px 16px; text-align: center; cursor: pointer; position: relative; margin-bottom: 12px; transition: background 0.2s; }
+.upload-zone:hover { background: var(--accent-mid); }
+.upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.upload-zone i { font-size: 40px; color: var(--accent); display: block; margin-bottom: 8px; }
+.upload-title { font-size: 15px; font-weight: 500; color: var(--accent-deeper); margin-bottom: 3px; }
+.upload-sub { font-size: 12px; color: var(--accent-dark); }
+.preview-img { width: 100%; max-height: 200px; object-fit: contain; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 12px; display: none; }
+.scan-btn { width: 100%; padding: 13px; background: var(--accent); color: white; border: none; border-radius: var(--radius); font-size: 15px; font-weight: 500; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; font-family: var(--font); }
+.scan-btn:hover:not(:disabled) { background: var(--accent-dark); }
+.scan-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.status-bar { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; display: none; align-items: center; gap: 8px; margin-bottom: 12px; }
+.status-bar.loading { display: flex; background: var(--accent-light); color: var(--accent-deeper); }
+.status-bar.error { display: flex; background: var(--danger-light); color: var(--danger); }
+.spin { animation: spin 1s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Result */
+.result-card { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: none; margin-bottom: 12px; }
+.result-header { background: var(--accent-light); padding: 10px 14px; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--accent-deeper); }
+.result-body { padding: 14px; }
+.amount-big { font-size: 30px; font-weight: 600; color: var(--accent-dark); text-align: center; padding: 14px; background: var(--accent-light); border-radius: var(--radius-sm); margin-bottom: 14px; }
+.amount-orig { font-size: 13px; color: var(--accent); margin-top: 2px; font-weight: 400; }
+.field-row { margin-bottom: 12px; }
+.field-label { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+.field-input { width: 100%; padding: 9px 11px; border: 1px solid var(--border2); border-radius: var(--radius-sm); font-size: 14px; background: var(--bg); color: var(--text); font-family: var(--font); outline: none; }
+.field-input:focus { border-color: var(--accent); }
+.field-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.cat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-bottom: 12px; }
+.cat-btn { padding: 8px 4px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg2); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; color: var(--text2); transition: all 0.15s; font-family: var(--font); }
+.cat-btn i { font-size: 19px; }
+.cat-btn.active { border-color: var(--accent); background: var(--accent-light); color: var(--accent-deeper); }
+.divider { height: 1px; background: var(--border); margin: 12px 0; }
+.save-btn { width: 100%; padding: 13px; background: var(--accent-dark); color: white; border: none; border-radius: var(--radius); font-size: 15px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-family: var(--font); }
+.save-btn:hover { background: var(--accent-deeper); }
+.reset-btn { width: 100%; padding: 10px; background: transparent; color: var(--text2); border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; cursor: pointer; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; font-family: var(--font); }
+.reset-btn:hover { background: var(--bg2); }
+.toggle-raw { font-size: 12px; color: var(--accent); cursor: pointer; display: none; margin-bottom: 8px; text-align: right; }
+.raw-text { font-size: 11px; color: var(--text2); font-family: monospace; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; white-space: pre-wrap; max-height: 100px; overflow-y: auto; display: none; margin-bottom: 12px; }
+
+/* Trip selector */
+.trip-bar { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; scrollbar-width: none; }
+.trip-bar::-webkit-scrollbar { display: none; }
+.trip-chip { flex-shrink: 0; padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg); font-size: 12px; cursor: pointer; color: var(--text2); white-space: nowrap; font-family: var(--font); }
+.trip-chip.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+/* History */
+.section-title { font-size: 11px; color: var(--text2); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px; margin-top: 14px; }
+.section-title:first-child { margin-top: 0; }
+.expense-item { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 7px; background: var(--bg); box-shadow: var(--shadow); }
+.expense-icon { width: 36px; height: 36px; border-radius: 50%; background: var(--accent-light); color: var(--accent-dark); display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
+.expense-info { flex: 1; min-width: 0; }
+.expense-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.expense-meta { font-size: 11px; color: var(--text2); margin-top: 2px; }
+.expense-amt { text-align: right; flex-shrink: 0; }
+.expense-twd { font-size: 14px; font-weight: 500; }
+.expense-orig { font-size: 11px; color: var(--text2); }
+.empty-state { text-align: center; padding: 48px 16px; color: var(--text2); }
+.empty-state i { font-size: 44px; display: block; margin-bottom: 10px; opacity: 0.25; }
+
+/* Stats */
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+.stat-card { background: var(--bg2); border-radius: var(--radius-sm); padding: 13px; }
+.stat-label { font-size: 12px; color: var(--text2); margin-bottom: 3px; }
+.stat-value { font-size: 22px; font-weight: 600; }
+.cat-bar { margin-bottom: 11px; }
+.cat-bar-top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
+.cat-bar-track { height: 7px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.cat-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s; }
+.fx-card { background: var(--bg2); border-radius: var(--radius-sm); padding: 13px; margin-top: 4px; }
+.fx-row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.fx-row:last-child { border-bottom: none; }
+
+/* Settings */
+.settings-section { margin-bottom: 20px; }
+.settings-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+.lang-item { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; margin-bottom: 6px; background: var(--bg); }
+.lang-item:hover { background: var(--bg2); }
+.lang-item.active { border-color: var(--accent); background: var(--accent-light); }
+.flag { font-size: 22px; }
+.lang-name { font-size: 14px; font-weight: 500; }
+.lang-sub { font-size: 12px; color: var(--text2); }
+.cur-chips { display: flex; gap: 7px; flex-wrap: wrap; }
+.cur-chip { padding: 7px 14px; border: 1px solid var(--border); border-radius: 20px; font-size: 13px; cursor: pointer; background: var(--bg); color: var(--text); font-family: var(--font); }
+.cur-chip.active { background: var(--accent); color: white; border-color: var(--accent); }
+.info-box { font-size: 13px; color: var(--text2); line-height: 1.8; background: var(--bg2); padding: 13px; border-radius: var(--radius-sm); }
+.info-box a { color: var(--accent); }
+
+/* Trip modal */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; align-items: flex-end; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--bg); border-radius: var(--radius) var(--radius) 0 0; padding: 16px; width: 100%; max-width: 440px; }
+.modal-handle { width: 36px; height: 4px; background: var(--border2); border-radius: 2px; margin: 0 auto 16px; }
+.modal-title { font-size: 16px; font-weight: 600; margin-bottom: 14px; }
+
+@media (min-width: 440px) {
+  .app-wrap { box-shadow: 0 0 40px rgba(0,0,0,0.1); }
+}
+</style>
+</head>
+<body>
+<div class="app-wrap">
+  <div class="header">
+    <div class="header-top">
+      <div class="header-left">
+        <i class="ti ti-camera-dollar" style="font-size:22px"></i>
+        <h1 id="appTitle">✈️ AI 旅行記帳</h1>
+      </div>
+      <button class="drive-btn" id="driveBtn" onclick="handleDriveAuth()">
+        <i class="ti ti-brand-google-drive"></i><span id="driveBtnText">登入 Google</span>
+      </button>
+    </div>
+    <p id="appSub">拍照辨識帳單，自動同步 Google 雲端</p>
+    <div class="drive-status" id="driveStatus"></div>
+  </div>
+
+  <div class="api-bar" id="apiBar">
+    <i class="ti ti-robot" style="font-size:16px;color:var(--warn)"></i>
+    <input class="api-input" type="password" id="apiKeyInput" placeholder="Gemini API Key (AIzaSy...)">
+    <button class="api-save-btn" onclick="saveApiKey()">儲存</button>
+  </div>
+  <div class="api-ok hidden" id="apiOk">
+    <i class="ti ti-check" style="font-size:15px"></i>
+    <span id="apiOkText">Gemini API Key 已設定</span>
+    <span class="api-change" onclick="changeApiKey()">更換</span>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('scan',this)"><i class="ti ti-camera"></i><span id="t1">拍照</span></button>
+    <button class="tab" onclick="switchTab('history',this)"><i class="ti ti-receipt"></i><span id="t2">記錄</span></button>
+    <button class="tab" onclick="switchTab('stats',this)"><i class="ti ti-chart-bar"></i><span id="t3">統計</span></button>
+    <button class="tab" onclick="switchTab('settings',this)"><i class="ti ti-settings"></i><span id="t4">設定</span></button>
+  </div>
+
+  <!-- 拍照 -->
+  <div class="panel active" id="panelScan">
+    <div class="trip-bar" id="scanTripBar"></div>
+
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" accept="image/*" capture="environment" id="fileInput" onchange="handleFile(event)">
+      <i class="ti ti-photo-scan"></i>
+      <div class="upload-title" id="uploadTitle">點擊拍攝或上傳帳單</div>
+      <div class="upload-sub" id="uploadSub">支援各國語言收據 · JPG / PNG</div>
+    </div>
+
+    <img id="previewImg" class="preview-img" alt="帳單預覽">
+
+    <div class="status-bar" id="statusBar">
+      <i class="ti ti-loader spin" id="statusIcon"></i>
+      <span id="statusText">Claude Vision 辨識中...</span>
+    </div>
+
+    <button class="scan-btn" id="scanBtn" onclick="scanReceipt()">
+      <i class="ti ti-robot"></i><span id="scanBtnText">使用 AI 辨識帳單</span>
+    </button>
+
+    <div class="result-card" id="resultCard">
+      <div class="result-header"><i class="ti ti-check"></i><span id="resultTitle">辨識完成，請確認後儲存</span></div>
+      <div class="result-body">
+        <div class="amount-big">
+          <div id="displayTwd">NT$0</div>
+          <div class="amount-orig" id="displayOrig"></div>
+        </div>
+        <div class="field-row">
+          <div class="field-label" id="lName">商店 / 消費名稱</div>
+          <input class="field-input" id="fieldName" placeholder="商店名稱">
+        </div>
+        <div class="field-row-2">
+          <div>
+            <div class="field-label" id="lAmt">金額</div>
+            <input class="field-input" id="fieldAmt" type="number" placeholder="0" oninput="recalc()">
+          </div>
+          <div>
+            <div class="field-label" id="lCur">幣別</div>
+            <select class="field-input" id="fieldCur" onchange="recalc()">
+              <option value="JPY">JPY ¥</option><option value="TWD">TWD NT$</option>
+              <option value="USD">USD $</option><option value="EUR">EUR €</option>
+              <option value="THB">THB ฿</option><option value="KRW">KRW ₩</option>
+              <option value="GBP">GBP £</option><option value="HKD">HKD HK$</option>
+              <option value="SGD">SGD S$</option><option value="CNY">CNY ¥</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-label" id="lCat" style="margin-bottom:8px">類別</div>
+        <div class="cat-grid">
+          <button class="cat-btn" data-cat="餐飲" onclick="selectCat(this)"><i class="ti ti-tools-kitchen-2"></i><span id="c1">餐飲</span></button>
+          <button class="cat-btn" data-cat="交通" onclick="selectCat(this)"><i class="ti ti-train"></i><span id="c2">交通</span></button>
+          <button class="cat-btn" data-cat="住宿" onclick="selectCat(this)"><i class="ti ti-bed"></i><span id="c3">住宿</span></button>
+          <button class="cat-btn" data-cat="購物" onclick="selectCat(this)"><i class="ti ti-shopping-bag"></i><span id="c4">購物</span></button>
+          <button class="cat-btn" data-cat="娛樂" onclick="selectCat(this)"><i class="ti ti-ticket"></i><span id="c5">娛樂</span></button>
+          <button class="cat-btn" data-cat="醫療" onclick="selectCat(this)"><i class="ti ti-first-aid-kit"></i><span id="c6">醫療</span></button>
+          <button class="cat-btn" data-cat="通訊" onclick="selectCat(this)"><i class="ti ti-wifi"></i><span id="c7">通訊</span></button>
+          <button class="cat-btn" data-cat="其他" onclick="selectCat(this)"><i class="ti ti-dots"></i><span id="c8">其他</span></button>
+        </div>
+        <div class="field-row">
+          <div class="field-label" id="lNote">備註</div>
+          <input class="field-input" id="fieldNote" placeholder="選填">
+        </div>
+        <div class="divider"></div>
+        <button class="save-btn" onclick="saveExpense()"><i class="ti ti-device-floppy"></i><span id="saveBtnText">儲存到記帳本</span></button>
+        <button class="reset-btn" onclick="resetScan()"><i class="ti ti-refresh"></i><span id="resetBtnText">重新上傳</span></button>
+      </div>
+    </div>
+    <span class="toggle-raw" id="toggleRaw" onclick="toggleRaw()">查看 AI 原始回應 ▾</span>
+    <div class="raw-text" id="rawText"></div>
+  </div>
+
+  <!-- 記錄 -->
+  <div class="panel" id="panelHistory">
+    <div class="trip-bar" id="histTripBar"></div>
+    <div id="historyList"></div>
+    <button class="reset-btn" id="clearBtn" onclick="clearTrip()" style="margin-top:12px;display:none">
+      <i class="ti ti-trash"></i><span id="clearBtnText">清除此行程記錄</span>
+    </button>
+  </div>
+
+  <!-- 統計 -->
+  <div class="panel" id="panelStats">
+    <div class="trip-bar" id="statTripBar"></div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-label" id="sl1">總花費</div><div class="stat-value" id="sv1">-</div></div>
+      <div class="stat-card"><div class="stat-label" id="sl2">記錄筆數</div><div class="stat-value" id="sv2">-</div></div>
+      <div class="stat-card"><div class="stat-label" id="sl3">日均花費</div><div class="stat-value" id="sv3">-</div></div>
+      <div class="stat-card"><div class="stat-label" id="sl4">旅行天數</div><div class="stat-value" id="sv4">-</div></div>
+    </div>
+    <div class="section-title" id="catTitle">各類別支出</div>
+    <div id="catBars"></div>
+    <div class="section-title" id="fxTitle" style="margin-top:16px">參考匯率（對 TWD）</div>
+    <div class="fx-card">
+      <div class="fx-row"><span>¥100 JPY</span><span>≈ NT$23.2</span></div>
+      <div class="fx-row"><span>$1 USD</span><span>≈ NT$32.1</span></div>
+      <div class="fx-row"><span>€1 EUR</span><span>≈ NT$34.8</span></div>
+      <div class="fx-row"><span>฿100 THB</span><span>≈ NT$93.5</span></div>
+      <div class="fx-row"><span>₩1000 KRW</span><span>≈ NT$23.2</span></div>
+    </div>
+  </div>
+
+  <!-- 設定 -->
+  <div class="panel" id="panelSettings">
+    <div class="settings-section">
+      <div class="settings-title" id="settTrip">🗺️ 行程管理</div>
+      <div id="tripList"></div>
+      <button class="save-btn" style="margin-top:8px" onclick="openTripModal()">
+        <i class="ti ti-plus"></i><span id="addTripText">新增行程</span>
+      </button>
+    </div>
+    <div class="settings-section">
+      <div class="settings-title" id="settLang">🌐 介面語言</div>
+      <div>
+        <div class="lang-item active" onclick="setLang('zh',this)"><span class="flag">🇹🇼</span><div><div class="lang-name">繁體中文</div><div class="lang-sub">Traditional Chinese</div></div></div>
+        <div class="lang-item" onclick="setLang('en',this)"><span class="flag">🇺🇸</span><div><div class="lang-name">English</div><div class="lang-sub">英語</div></div></div>
+        <div class="lang-item" onclick="setLang('ja',this)"><span class="flag">🇯🇵</span><div><div class="lang-name">日本語</div><div class="lang-sub">Japanese</div></div></div>
+        <div class="lang-item" onclick="setLang('ko',this)"><span class="flag">🇰🇷</span><div><div class="lang-name">한국어</div><div class="lang-sub">Korean</div></div></div>
+        <div class="lang-item" onclick="setLang('th',this)"><span class="flag">🇹🇭</span><div><div class="lang-name">ภาษาไทย</div><div class="lang-sub">Thai</div></div></div>
+        <div class="lang-item" onclick="setLang('fr',this)"><span class="flag">🇫🇷</span><div><div class="lang-name">Français</div><div class="lang-sub">法語</div></div></div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-title" id="settCur">💱 主要幣別</div>
+      <div class="cur-chips">
+        <button class="cur-chip active" onclick="setBaseCur('TWD',this)">TWD NT$</button>
+        <button class="cur-chip" onclick="setBaseCur('JPY',this)">JPY ¥</button>
+        <button class="cur-chip" onclick="setBaseCur('USD',this)">USD $</button>
+        <button class="cur-chip" onclick="setBaseCur('EUR',this)">EUR €</button>
+        <button class="cur-chip" onclick="setBaseCur('THB',this)">THB ฿</button>
+        <button class="cur-chip" onclick="setBaseCur('KRW',this)">KRW ₩</button>
+      </div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-title">ℹ️ 使用說明</div>
+      <div class="info-box">
+        1. 點右上角「登入 Google」連結雲端硬碟<br>
+        2. 在「設定」輸入 Gemini API Key<br>
+        3. 建立旅行行程，切換行程記帳<br>
+        4. 拍照上傳帳單，AI 自動辨識<br>
+        5. 資料自動同步至 Google 雲端<br><br>
+        Gemini API Key：<a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a>（免費）
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 新增行程 Modal -->
+<div class="modal-overlay" id="tripModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="tripModalTitle">新增旅行行程</div>
+    <div class="field-row">
+      <div class="field-label">行程名稱</div>
+      <input class="field-input" id="tripName" placeholder="例：日本旅行 🇯🇵">
+    </div>
+    <div class="field-row-2">
+      <div>
+        <div class="field-label">開始日期</div>
+        <input class="field-input" id="tripStart" type="date">
+      </div>
+      <div>
+        <div class="field-label">結束日期</div>
+        <input class="field-input" id="tripEnd" type="date">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field-label">預算（換算後）</div>
+      <input class="field-input" id="tripBudget" type="number" placeholder="0">
+    </div>
+    <button class="save-btn" onclick="saveTrip()"><i class="ti ti-check"></i>儲存行程</button>
+    <button class="reset-btn" onclick="closeTripModal()" style="margin-top:8px"><i class="ti ti-x"></i>取消</button>
+  </div>
+</div>
+
+<script>
+// ============ 常數 ============
+const CLIENT_ID = '941624223064-hmu8377qp03oku73jbbhcbgsonss07cv.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
+const FILE_NAME = 'travel-expense-data.json';
+const FX = { JPY:0.2317, TWD:1, USD:32.1, EUR:34.8, THB:0.935, KRW:0.0232, GBP:40.5, HKD:4.12, SGD:23.8, CNY:4.43 };
+const SYM = { JPY:'¥', TWD:'NT$', USD:'$', EUR:'€', THB:'฿', KRW:'₩', GBP:'£', HKD:'HK$', SGD:'S$', CNY:'¥' };
+const CAT_ICONS = { 餐飲:'ti-tools-kitchen-2', 交通:'ti-train', 住宿:'ti-bed', 購物:'ti-shopping-bag', 娛樂:'ti-ticket', 醫療:'ti-first-aid-kit', 通訊:'ti-wifi', 其他:'ti-dots' };
+const CAT_COLORS = { 餐飲:'#1D9E75', 交通:'#378ADD', 住宿:'#7F77DD', 購物:'#EF9F27', 娛樂:'#D4537E', 醫療:'#E05252', 通訊:'#4ABFBF', 其他:'#999' };
+
+const I18N = {
+  zh: { appTitle:'✈️ AI 旅行記帳', appSub:'拍照辨識帳單，自動同步 Google 雲端', t1:'拍照', t2:'記錄', t3:'統計', t4:'設定', uploadTitle:'點擊拍攝或上傳帳單', uploadSub:'支援各國語言收據', scanBtnText:'AI 辨識帳單', resultTitle:'辨識完成，請確認後儲存', lName:'商店 / 消費名稱', lAmt:'金額', lCur:'幣別', lCat:'類別', lNote:'備註', saveBtnText:'儲存到記帳本', resetBtnText:'重新上傳', clearBtnText:'清除此行程記錄', sl1:'總花費', sl2:'筆數', sl3:'日均', sl4:'天數', catTitle:'各類別支出', fxTitle:'參考匯率', settTrip:'🗺️ 行程管理', settLang:'🌐 介面語言', settCur:'💱 主要幣別', addTripText:'新增行程', apiOkText:'Gemini API Key 已設定', c1:'餐飲', c2:'交通', c3:'住宿', c4:'購物', c5:'娛樂', c6:'醫療', c7:'通訊', c8:'其他', driveSynced:'雲端同步完成', driveSyncing:'同步中...', driveLogin:'登入 Google', driveLogout:'登出', emptyHint:'尚無記錄，請先拍照辨識帳單' },
+  en: { appTitle:'✈️ AI Travel Tracker', appSub:'Snap receipts, sync to Google Drive', t1:'Scan', t2:'Records', t3:'Stats', t4:'Settings', uploadTitle:'Tap to capture or upload', uploadSub:'Any language receipt', scanBtnText:'AI Scan Receipt', resultTitle:'Done! Review and save', lName:'Store / Description', lAmt:'Amount', lCur:'Currency', lCat:'Category', lNote:'Notes', saveBtnText:'Save to Records', resetBtnText:'Rescan', clearBtnText:'Clear Trip Records', sl1:'Total Spent', sl2:'Records', sl3:'Daily Avg', sl4:'Days', catTitle:'By Category', fxTitle:'Exchange Rates', settTrip:'🗺️ Trips', settLang:'🌐 Language', settCur:'💱 Base Currency', addTripText:'Add Trip', apiOkText:'Gemini API Key saved', c1:'Food', c2:'Transport', c3:'Hotel', c4:'Shopping', c5:'Fun', c6:'Medical', c7:'Comms', c8:'Other', driveSynced:'Synced to Drive', driveSyncing:'Syncing...', driveLogin:'Sign in Google', driveLogout:'Sign out', emptyHint:'No records yet. Scan a receipt to start.' },
+  ja: { appTitle:'✈️ AI 旅行家計簿', appSub:'レシート撮影・Google Drive同期', t1:'撮影', t2:'記録', t3:'統計', t4:'設定', uploadTitle:'レシートを撮影・アップロード', uploadSub:'どの言語でも対応', scanBtnText:'AIで認識', resultTitle:'認識完了！確認して保存', lName:'店名 / 内容', lAmt:'金額', lCur:'通貨', lCat:'カテゴリ', lNote:'メモ', saveBtnText:'保存する', resetBtnText:'再撮影', clearBtnText:'この旅行の記録を削除', sl1:'合計', sl2:'件数', sl3:'日平均', sl4:'日数', catTitle:'カテゴリ別', fxTitle:'為替レート', settTrip:'🗺️ 旅行管理', settLang:'🌐 言語', settCur:'💱 基準通貨', addTripText:'旅行を追加', apiOkText:'Gemini API Key 設定済み', c1:'食事', c2:'交通', c3:'宿泊', c4:'買物', c5:'娯楽', c6:'医療', c7:'通信', c8:'その他', driveSynced:'同期完了', driveSyncing:'同期中...', driveLogin:'Googleログイン', driveLogout:'ログアウト', emptyHint:'記録がありません' },
+  ko: { appTitle:'✈️ AI 여행 가계부', appSub:'영수증 촬영 · Google Drive 동기화', t1:'촬영', t2:'기록', t3:'통계', t4:'설정', uploadTitle:'영수증 촬영 또는 업로드', uploadSub:'모든 언어 영수증 지원', scanBtnText:'AI로 인식', resultTitle:'인식 완료! 확인 후 저장', lName:'상점 / 내역', lAmt:'금액', lCur:'통화', lCat:'카테고리', lNote:'메모', saveBtnText:'저장', resetBtnText:'다시 촬영', clearBtnText:'이 여행 기록 삭제', sl1:'합계', sl2:'건수', sl3:'일평균', sl4:'일수', catTitle:'카테고리별', fxTitle:'환율', settTrip:'🗺️ 여행 관리', settLang:'🌐 언어', settCur:'💱 기준 통화', addTripText:'여행 추가', apiOkText:'Gemini API Key 저장됨', c1:'식비', c2:'교통', c3:'숙박', c4:'쇼핑', c5:'오락', c6:'의료', c7:'통신', c8:'기타', driveSynced:'동기화 완료', driveSyncing:'동기화 중...', driveLogin:'Google 로그인', driveLogout:'로그아웃', emptyHint:'기록이 없습니다.' },
+  th: { appTitle:'✈️ บัญชีท่องเที่ยว AI', appSub:'ถ่ายใบเสร็จ บันทึกลง Google Drive', t1:'ถ่าย', t2:'บันทึก', t3:'สถิติ', t4:'ตั้งค่า', uploadTitle:'ถ่ายหรืออัปโหลดใบเสร็จ', uploadSub:'รองรับทุกภาษา', scanBtnText:'AI อ่านใบเสร็จ', resultTitle:'อ่านเสร็จ! ตรวจสอบแล้วบันทึก', lName:'ร้านค้า / รายการ', lAmt:'จำนวนเงิน', lCur:'สกุลเงิน', lCat:'หมวดหมู่', lNote:'หมายเหตุ', saveBtnText:'บันทึก', resetBtnText:'ถ่ายใหม่', clearBtnText:'ล้างรายการทริปนี้', sl1:'รวม', sl2:'รายการ', sl3:'เฉลี่ย/วัน', sl4:'วัน', catTitle:'แยกตามหมวด', fxTitle:'อัตราแลกเปลี่ยน', settTrip:'🗺️ จัดการทริป', settLang:'🌐 ภาษา', settCur:'💱 สกุลเงินหลัก', addTripText:'เพิ่มทริป', apiOkText:'บันทึก Gemini API Key แล้ว', c1:'อาหาร', c2:'เดินทาง', c3:'ที่พัก', c4:'ช้อปปิ้ง', c5:'บันเทิง', c6:'การแพทย์', c7:'สื่อสาร', c8:'อื่นๆ', driveSynced:'ซิงค์แล้ว', driveSyncing:'กำลังซิงค์...', driveLogin:'เข้าสู่ระบบ Google', driveLogout:'ออกจากระบบ', emptyHint:'ยังไม่มีรายการ' },
+  fr: { appTitle:'✈️ Carnet de Voyage IA', appSub:'Scannez vos reçus, synchronisez Drive', t1:'Scanner', t2:'Dépenses', t3:'Stats', t4:'Réglages', uploadTitle:'Photographiez votre reçu', uploadSub:'Toutes langues supportées', scanBtnText:"Scanner avec l'IA", resultTitle:'Terminé! Vérifiez et sauvegardez', lName:'Magasin / Description', lAmt:'Montant', lCur:'Devise', lCat:'Catégorie', lNote:'Note', saveBtnText:'Sauvegarder', resetBtnText:'Re-scanner', clearBtnText:'Supprimer ce voyage', sl1:'Total', sl2:'Entrées', sl3:'Moy./jour', sl4:'Jours', catTitle:'Par catégorie', fxTitle:'Taux de change', settTrip:'🗺️ Voyages', settLang:'🌐 Langue', settCur:'💱 Devise de base', addTripText:'Ajouter un voyage', apiOkText:'Clé Gemini API enregistrée', c1:'Repas', c2:'Transport', c3:'Hébergement', c4:'Shopping', c5:'Loisirs', c6:'Médical', c7:'Comm.', c8:'Autre', driveSynced:'Synchronisé', driveSyncing:'Synchronisation...', driveLogin:'Connexion Google', driveLogout:'Déconnexion', emptyHint:'Aucune dépense enregistrée.' }
+};
+
+// ============ 狀態 ============
+let data = { trips: [], expenses: [] }; // trips: [{id,name,start,end,budget}], expenses: [{id,tripId,name,amt,cur,twd,cat,note,time}]
+let currentLang = localStorage.getItem('lang') || 'zh';
+let baseCur = localStorage.getItem('baseCur') || 'TWD';
+let currentTripId = null;
+let driveFileId = null;
+let accessToken = null;
+let tokenClient = null;
+let currentFile = null, currentBase64 = null, rawVisible = false;
+
+// ============ i18n ============
+function t(key) { return (I18N[currentLang] || I18N.zh)[key] || key; }
+function applyLang() {
+  Object.keys(I18N.zh).forEach(k => { const el = document.getElementById(k); if(el) el.textContent = t(k); });
+}
+function setLang(lang, el) {
+  currentLang = lang; localStorage.setItem('lang', lang);
+  document.querySelectorAll('.lang-item').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  applyLang(); renderAll();
+}
+
+// ============ API Key ============
+function saveApiKey() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (!key.startsWith('AIza')) { alert('請輸入有效的 Gemini API Key（AIzaSy...）'); return; }
+  localStorage.setItem('apiKey', key);
+  document.getElementById('apiBar').classList.add('hidden');
+  document.getElementById('apiOk').classList.remove('hidden');
+}
+function changeApiKey() {
+  localStorage.removeItem('apiKey');
+  document.getElementById('apiBar').classList.remove('hidden');
+  document.getElementById('apiOk').classList.add('hidden');
+  document.getElementById('apiKeyInput').value = '';
+}
+
+// ============ Google Drive ============
+function initGoogleAuth() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID, scope: SCOPES,
+    callback: async (resp) => {
+      if (resp.error) { setDriveStatus('error', '登入失敗'); return; }
+      accessToken = resp.access_token;
+      localStorage.setItem('driveToken', accessToken);
+      document.getElementById('driveBtnText').textContent = t('driveLogout');
+      setDriveStatus('ok', '');
+      await loadFromDrive();
+    }
+  });
+}
+
+function handleDriveAuth() {
+  if (accessToken) {
+    google.accounts.oauth2.revoke(accessToken, () => {});
+    accessToken = null; driveFileId = null;
+    localStorage.removeItem('driveToken');
+    document.getElementById('driveBtnText').textContent = t('driveLogin');
+    setDriveStatus('', '');
+  } else {
+    tokenClient.requestAccessToken({ prompt: '' });
+  }
+}
+
+function setDriveStatus(type, msg) {
+  const el = document.getElementById('driveStatus');
+  if (type === 'syncing') el.textContent = '⏳ ' + t('driveSyncing');
+  else if (type === 'ok') el.textContent = msg || ('✅ ' + t('driveSynced'));
+  else if (type === 'error') el.textContent = '❌ ' + msg;
+  else el.textContent = '';
+}
+
+async function loadFromDrive() {
+  if (!accessToken) return;
+  setDriveStatus('syncing', '');
+  try {
+    const search = await fetch(
+      `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${FILE_NAME}'&fields=files(id)`,
+      { headers: { Authorization: 'Bearer ' + accessToken } }
+    );
+    const res = await search.json();
+    if (res.files && res.files.length > 0) {
+      driveFileId = res.files[0].id;
+      const fileRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`,
+        { headers: { Authorization: 'Bearer ' + accessToken } }
+      );
+      const loaded = await fileRes.json();
+      if (loaded.trips) data = loaded;
+      if (!currentTripId && data.trips.length > 0) currentTripId = data.trips[0].id;
+      renderAll();
+    }
+    setDriveStatus('ok', '');
+  } catch(e) { setDriveStatus('error', '讀取失敗'); }
+}
+
+async function saveToDrive() {
+  if (!accessToken) { saveLocal(); return; }
+  setDriveStatus('syncing', '');
+  const body = JSON.stringify(data);
+  try {
+    if (driveFileId) {
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`, {
+        method: 'PATCH', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, body
+      });
+    } else {
+      const meta = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: FILE_NAME, parents: ['appDataFolder'] })
+      });
+      const metaRes = await meta.json();
+      driveFileId = metaRes.id;
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`, {
+        method: 'PATCH', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, body
+      });
+    }
+    setDriveStatus('ok', '');
+  } catch(e) { setDriveStatus('error', '同步失敗'); }
+  saveLocal();
+}
+
+function saveLocal() { localStorage.setItem('data', JSON.stringify(data)); }
+function loadLocal() {
+  const d = localStorage.getItem('data');
+  if (d) { try { data = JSON.parse(d); } catch(e){} }
+  if (!currentTripId && data.trips.length > 0) currentTripId = data.trips[0].id;
+}
+
+// ============ 行程 ============
+function openTripModal() { document.getElementById('tripModal').classList.add('open'); document.getElementById('tripName').value = ''; document.getElementById('tripStart').value = ''; document.getElementById('tripEnd').value = ''; document.getElementById('tripBudget').value = ''; }
+function closeTripModal() { document.getElementById('tripModal').classList.remove('open'); }
+function saveTrip() {
+  const name = document.getElementById('tripName').value.trim();
+  if (!name) { alert('請輸入行程名稱'); return; }
+  const trip = { id: Date.now().toString(), name, start: document.getElementById('tripStart').value, end: document.getElementById('tripEnd').value, budget: parseFloat(document.getElementById('tripBudget').value) || 0 };
+  data.trips.unshift(trip);
+  currentTripId = trip.id;
+  closeTripModal(); saveToDrive(); renderAll();
+}
+function deleteTrip(id) {
+  if (!confirm('確定刪除此行程及所有記錄？')) return;
+  data.trips = data.trips.filter(t => t.id !== id);
+  data.expenses = data.expenses.filter(e => e.tripId !== id);
+  if (currentTripId === id) currentTripId = data.trips[0]?.id || null;
+  saveToDrive(); renderAll();
+}
+
+function renderTripBar(containerId) {
+  const el = document.getElementById(containerId);
+  if (!data.trips.length) { el.innerHTML = '<span style="font-size:12px;color:var(--text2)">請先在設定新增行程</span>'; return; }
+  el.innerHTML = data.trips.map(tr => `<div class="trip-chip ${tr.id === currentTripId ? 'active' : ''}" onclick="selectTrip('${tr.id}')">${tr.name}</div>`).join('');
+}
+function selectTrip(id) { currentTripId = id; renderAll(); }
+
+function renderTripList() {
+  const el = document.getElementById('tripList');
+  if (!data.trips.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text2);padding:8px 0">尚無行程</div>'; return; }
+  el.innerHTML = data.trips.map(tr => `
+    <div style="display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:7px;background:var(--bg)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:500">${tr.name}</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px">${tr.start || '?'} ~ ${tr.end || '?'} · 預算 ${SYM[baseCur]||''}${Math.round(tr.budget/(FX[baseCur]||1)).toLocaleString()}</div>
+      </div>
+      <button onclick="deleteTrip('${tr.id}')" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px;padding:4px"><i class="ti ti-trash"></i></button>
+    </div>`).join('');
+}
+
+// ============ 掃描 ============
+function handleFile(e) {
+  const file = e.target.files[0]; if (!file) return;
+  currentFile = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    currentBase64 = ev.target.result.split(',')[1];
+    document.getElementById('previewImg').src = ev.target.result;
+    document.getElementById('previewImg').style.display = 'block';
+    document.getElementById('uploadZone').style.display = 'none';
+    document.getElementById('scanBtn').style.display = 'flex';
+    document.getElementById('resultCard').style.display = 'none';
+    document.getElementById('toggleRaw').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+function setStatus(type, text) {
+  const bar = document.getElementById('statusBar');
+  document.getElementById('statusText').textContent = text;
+  document.getElementById('statusIcon').className = type === 'loading' ? 'ti ti-loader spin' : 'ti ti-alert-circle';
+  bar.className = 'status-bar ' + (type || '');
+}
+
+async function scanReceipt() {
+  const apiKey = localStorage.getItem('apiKey');
+  if (!apiKey) { alert('請先在「設定」頁輸入 Gemini API Key'); return; }
+  if (!currentBase64) return;
+  document.getElementById('scanBtn').disabled = true;
+  document.getElementById('resultCard').style.display = 'none';
+  setStatus('loading', 'Gemini Vision 辨識中...');
+
+  const prompt = `你是旅行記帳助手。分析這張收據/帳單圖片，只回傳 JSON，不要其他文字：
+{"store_name":"商店名稱（看不到填unknown）","amount":數字,"currency":"ISO貨幣代碼（JPY/USD/TWD/THB/EUR/KRW/GBP/HKD/SGD/CNY）","category":"餐飲/交通/住宿/購物/娛樂/醫療/通訊/其他","note":"繁體中文摘要20字內","confidence":"high/medium/low"}`;
+
+  try {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [
+            { inline_data: { mime_type: currentFile.type || 'image/jpeg', data: currentBase64 } },
+            { text: prompt }
+          ]}],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 500 }
+        })
+      }
+    );
+    const res = await resp.json();
+    if (res.error) throw new Error(res.error.message);
+    const raw = res.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    document.getElementById('rawText').textContent = raw;
+    document.getElementById('toggleRaw').style.display = 'block';
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('無法解析回應');
+    const r = JSON.parse(match[0]);
+    populateResult(r);
+    document.getElementById('statusBar').className = 'status-bar';
+    document.getElementById('resultCard').style.display = 'block';
+    document.getElementById('scanBtn').style.display = 'none';
+  } catch(err) {
+    setStatus('error', '辨識失敗：' + err.message);
+    document.getElementById('scanBtn').disabled = false;
+  }
+}
+
+function populateResult(r) {
+  document.getElementById('fieldName').value = (r.store_name && r.store_name !== 'unknown') ? r.store_name : '';
+  document.getElementById('fieldAmt').value = r.amount || 0;
+  document.getElementById('fieldNote').value = r.note || '';
+  const sel = document.getElementById('fieldCur');
+  for (let o of sel.options) { if (o.value === r.currency) { sel.value = r.currency; break; } }
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.toggle('active', b.dataset.cat === r.category));
+  recalc();
+}
+function recalc() {
+  const amt = parseFloat(document.getElementById('fieldAmt').value) || 0;
+  const cur = document.getElementById('fieldCur').value;
+  const twd = amt * (FX[cur] || 1);
+  const baseAmt = twd / (FX[baseCur] || 1);
+  document.getElementById('displayTwd').textContent = (SYM[baseCur]||'') + Math.round(baseAmt).toLocaleString();
+  document.getElementById('displayOrig').textContent = (SYM[cur]||'') + amt.toLocaleString() + ' ' + cur;
+}
+function selectCat(el) { document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active')); el.classList.add('active'); }
+function toggleRaw() { rawVisible = !rawVisible; document.getElementById('rawText').style.display = rawVisible ? 'block' : 'none'; document.getElementById('toggleRaw').textContent = rawVisible ? '收起 AI 原始回應 ▴' : '查看 AI 原始回應 ▾'; }
+
+function saveExpense() {
+  if (!currentTripId) { alert('請先在「設定」新增並選擇行程'); return; }
+  const amt = parseFloat(document.getElementById('fieldAmt').value) || 0;
+  const cur = document.getElementById('fieldCur').value;
+  const exp = {
+    id: Date.now().toString(), tripId: currentTripId,
+    name: document.getElementById('fieldName').value || '未命名',
+    amt, cur, twd: amt * (FX[cur]||1),
+    cat: document.querySelector('.cat-btn.active')?.dataset.cat || '其他',
+    note: document.getElementById('fieldNote').value,
+    time: new Date().toLocaleString('zh-TW', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })
+  };
+  data.expenses.unshift(exp);
+  saveToDrive(); resetScan();
+  switchTab('history', document.querySelectorAll('.tab')[1]);
+}
+function resetScan() {
+  currentBase64 = null; currentFile = null; rawVisible = false;
+  document.getElementById('fileInput').value = '';
+  document.getElementById('previewImg').style.display = 'none';
+  document.getElementById('uploadZone').style.display = 'block';
+  document.getElementById('scanBtn').style.display = 'none';
+  document.getElementById('scanBtn').disabled = false;
+  document.getElementById('resultCard').style.display = 'none';
+  document.getElementById('statusBar').className = 'status-bar';
+  document.getElementById('toggleRaw').style.display = 'none';
+  document.getElementById('rawText').style.display = 'none';
+}
+
+// ============ 記錄 ============
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  const clearBtn = document.getElementById('clearBtn');
+  const exps = data.expenses.filter(e => e.tripId === currentTripId);
+  if (!exps.length) {
+    list.innerHTML = `<div class="empty-state"><i class="ti ti-receipt-off"></i><div>${t('emptyHint')}</div></div>`;
+    clearBtn.style.display = 'none'; return;
+  }
+  clearBtn.style.display = 'flex';
+  // Group by date
+  const groups = {};
+  exps.forEach(e => { const d = e.time.split(' ')[0] || e.time; if(!groups[d]) groups[d]=[]; groups[d].push(e); });
+  list.innerHTML = Object.entries(groups).map(([date, items]) => `
+    <div class="section-title">${date}</div>
+    ${items.map(e => `
+      <div class="expense-item">
+        <div class="expense-icon"><i class="ti ${CAT_ICONS[e.cat]||'ti-dots'}"></i></div>
+        <div class="expense-info">
+          <div class="expense-name">${e.name}</div>
+          <div class="expense-meta">${e.cat}${e.note ? ' · ' + e.note : ''}</div>
+        </div>
+        <div class="expense-amt">
+          <div class="expense-twd">${SYM[baseCur]||''}${Math.round(e.twd/(FX[baseCur]||1)).toLocaleString()}</div>
+          <div class="expense-orig">${SYM[e.cur]||''}${e.amt.toLocaleString()} ${e.cur}</div>
+        </div>
+      </div>`).join('')}`).join('');
+}
+function clearTrip() {
+  if (!confirm('確定清除此行程所有記錄？')) return;
+  data.expenses = data.expenses.filter(e => e.tripId !== currentTripId);
+  saveToDrive(); renderAll();
+}
+
+// ============ 統計 ============
+function renderStats() {
+  const exps = data.expenses.filter(e => e.tripId === currentTripId);
+  const total = exps.reduce((s,e) => s + e.twd/(FX[baseCur]||1), 0);
+  const trip = data.trips.find(t => t.id === currentTripId);
+  const days = trip && trip.start && trip.end ? Math.max(1, Math.round((new Date(trip.end)-new Date(trip.start))/(86400000))+1) : 1;
+  document.getElementById('sv1').textContent = (SYM[baseCur]||'') + Math.round(total).toLocaleString();
+  document.getElementById('sv2').textContent = exps.length;
+  document.getElementById('sv3').textContent = (SYM[baseCur]||'') + Math.round(total/days).toLocaleString();
+  document.getElementById('sv4').textContent = days;
+  const byCat = {};
+  exps.forEach(e => { byCat[e.cat] = (byCat[e.cat]||0) + e.twd/(FX[baseCur]||1); });
+  const bars = document.getElementById('catBars');
+  if (!Object.keys(byCat).length) { bars.innerHTML = '<div style="color:var(--text2);font-size:13px">尚無資料</div>'; return; }
+  bars.innerHTML = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat, val]) => `
+    <div class="cat-bar">
+      <div class="cat-bar-top"><span>${cat}</span><span>${SYM[baseCur]||''}${Math.round(val).toLocaleString()} (${total?Math.round(val/total*100):0}%)</span></div>
+      <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${total?val/total*100:0}%;background:${CAT_COLORS[cat]||'#999'}"></div></div>
+    </div>`).join('');
+}
+
+// ============ 其他 ============
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+  renderAll();
+}
+function setBaseCur(cur, el) {
+  baseCur = cur; localStorage.setItem('baseCur', cur);
+  document.querySelectorAll('.cur-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderAll();
+}
+function renderAll() {
+  ['scan','hist','stat'].forEach(id => renderTripBar(id + 'TripBar'));
+  renderTripList(); renderHistory(); renderStats();
+}
+
+// ============ 初始化 ============
+window.addEventListener('load', () => {
+  loadLocal();
+  applyLang();
+  // 同步語言選擇 UI
+  document.querySelectorAll('.lang-item').forEach((el, i) => {
+    const langs = ['zh','en','ja','ko','th','fr'];
+    el.classList.toggle('active', langs[i] === currentLang);
+  });
+  // 同步幣別選擇 UI
+  document.querySelectorAll('.cur-chip').forEach(el => {
+    el.classList.toggle('active', el.textContent.startsWith(baseCur));
+  });
+  // API Key
+  if (localStorage.getItem('apiKey')) {
+    document.getElementById('apiBar').classList.add('hidden');
+    document.getElementById('apiOk').classList.remove('hidden');
+  }
+  renderAll();
+  // Google
+  google.accounts.id.initialize({ client_id: CLIENT_ID });
+  initGoogleAuth();
+  const savedToken = localStorage.getItem('driveToken');
+  if (savedToken) {
+    accessToken = savedToken;
+    document.getElementById('driveBtnText').textContent = t('driveLogout');
+    loadFromDrive();
+  }
+});
+</script>
+</body>
+</html>
